@@ -2,13 +2,13 @@
   "private": true,
   "name": "todos",
   "version": "1.0.0",
-  "description": "A template for kick starting a Cloudflare Workers project",
-  "main": "index.js",
+  "description": "TODOs tutorial project",
+  "main": "todos.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier --write '**/*.{js,css,json,md}'"
   },
-  "author": "gsm-josh <joshua@greyskymedia.com>",
+  "author": "Josh Pelser <joshua@thepelsers.com>",
   "license": "MIT",
   "devDependencies": {
     "prettier": "^1.18.2"

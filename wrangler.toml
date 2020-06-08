@@ -1,6 +1,11 @@
 name = "todos"
 type = "javascript"
-account_id = ""
+account_id = "c402589925408688743cf3729029ed26"
 workers_dev = true
 route = ""
-zone_id = ""
+zone_id = "a8f958ac59af1f79f963e9028acb6a1e"
+
+#KV Namespaces
+kv-namespaces = [
+    {binding = "TODOS", id = "c6209cc65021481e9778d2cb8749d267"}
+]
