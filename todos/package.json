@@ -3,7 +3,7 @@
   "name": "todos",
   "version": "1.0.0",
   "description": "TODOs tutorial project",
-  "main": "todos.js",
+  "main": "",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier --write '**/*.{js,css,json,md}'"
@@ -12,5 +12,8 @@
   "license": "MIT",
   "devDependencies": {
     "prettier": "^1.18.2"
+  },
+  "dependencies": {
+    "cookie": "^0.4.1"
   }
 }

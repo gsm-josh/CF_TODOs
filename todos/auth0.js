@@ -5,19 +5,58 @@ const auth0 = {
     callbackUrl: AUTH0_CALLBACK_URL,
 };
 
-const cookieKey = 'AUTH0-AUTH'
+const cookieKey = 'AUTH0-AUTH';
+
+export const logout = event => {
+    const cookieHeader = event.request.headers.get('Cookie');
+    if (cookieHeader && cookieHeader.includes(cookieKey)) {
+        return {
+            headers: {
+                'Set-cookie': `${cookieKey}=""; SameSize-Lax; Secure;`,
+            },
+        }
+    }
+    return {}
+};
 
 const redirectUrl = state => `${auth0.domain}/authorize?response_type=code&client_id=${auth0.clientId}&redirect_uri=${auth0.callbackUrl}&scope=openid%20profile%20email&state=${encodeURIComponent(state)}`;
 
-const generateStateParam = () => "stub";
+const generateStateParam = async () => {
+    const resp = await fetch("https://csprng.xyz/v1/api");
+    const { Data: state } = await resp.json();
+    await AUTH_STORE.put(`state-${state}`, true, { expirationTtl: 86400 });
+    return state
+};
+
+import cookie from 'cookie'
 
 const verify = async event => {
-    // Verify a user based on an auth cookie and Workers KV data
-    return { accessToken: '123' };
+    const cookieHeader = event.request.headers.get('Cookie');
+    if (cookieHeader && cookieHeader.includes(cookieKey)) {
+        const cookies = cookie.parse(cookieHeader);
+        if (!cookies[cookieKey]) return {};
+        const sub = cookies[cookieKey];
+
+        const kvData = await AUTH_STORE.get(sub);
+        if (!kvData) {
+            throw new Error('Unable to find authorization data');
+        }
+
+        let kvStored;
+        try {
+            kvStored = JSON.parse(kvData);
+        } catch (err) {
+            throw new Error('Unable to parse auth information from Workers KV');
+        }
+
+        const { access_token: accessToken, id_token: idToken } = kvStored;
+        const userInfo = JSON.parse(decodeJWT(idToken));
+        return { accessToken, idToken, userInfo };
+    }
+    return {}
 };
 
 // Returns an array with the format
-//   [authorized, context]
 export const authorize = async event => {
     const authorization = await verify(event);
     if (authorization.accessToken) {

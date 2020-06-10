@@ -1,4 +1,4 @@
-const html = todos => `
+const html = (todos, jsonState) => `
 <!DOCTYPE html>
 <html>
     <head>
@@ -8,7 +8,8 @@ const html = todos => `
     </head>
     
     <body>
-        <h1>Todos</h1>
+        <h1><span class="nickname"></span> Todos</h1>
+        <a href="/logout">Log out</a>
         <div>
             <input type="text" name="name" placeholder="A new todo" />
             <button id="create">Create</button>
@@ -17,6 +18,7 @@ const html = todos => `
     </body>
     
     <script>
+        const edge_state = ${jsonState};
         window.todos = ${todos};
         
         var updateTodos = function() {
@@ -71,6 +73,7 @@ const html = todos => `
         };
 
         document.querySelector('#create').addEventListener('click', createTodo);
+        document.querySelector('.nickname').textContent = edge_state.nickname+"'s";
     </script>
 </html>
 `;
@@ -88,10 +91,10 @@ const defaultData = {
 const setCache = (key, data) => TODOS.put(key, data);
 const getCache = key => TODOS.get(key);
 
-async function updateTodos(request) {
+async function updateTodos(request, authorization) {
     const body = await request.text();
-    const ip = request.headers.get('CF-Connecting-IP');
-    const myKey = `data-${ip}`;
+    // const ip = request.headers.get('CF-Connecting-IP');
+    const myKey = `data-${authorization.userInfo.sub}`;
     try {
         JSON.parse(body);
         await setCache(myKey, body);
@@ -105,9 +108,9 @@ async function updateTodos(request) {
  * Respond with hello worker text
  * @param {Request} request
  */
-async function getTodos(request) {
-    const ip = request.headers.get('CF-Connecting-IP');
-    const myKey = `data-${ip}`;
+async function getTodos(request, authorization) {
+    // const ip = request.headers.get('CF-Connecting-IP');
+    const myKey = `data-${authorization.userInfo.sub}`;
 
     let data;
     const cache = await getCache(myKey);
@@ -118,23 +121,16 @@ async function getTodos(request) {
         data = JSON.parse(cache);
     }
 
-    const body = html(JSON.stringify(data.todos || []));
+    const jsonState = JSON.stringify(authorization.userInfo);
+    const body = html(JSON.stringify(data.todos || []), jsonState);
     return new Response(body, {
         headers: { 'Content-Type': 'text/html' },
     });
 }
 
-import { authorize, handleRedirect } from './auth0';
+import { authorize, handleRedirect, logout } from './auth0';
 
-async function handleRequest(request) {
-    if (request.method === 'PUT') {
-        return updateTodos(request);
-    } else {
-        return getTodos(request);
-    }
-}
-
-addEventListener('fetch', event => {
+async function handleRequest(event) {
     let request = event.request;
     let response = new Response(null);
     const url = new URL(request.url);
@@ -152,6 +148,16 @@ addEventListener('fetch', event => {
             return response
         }
 
+        if (url.pathname === "/logout") {
+            const { headers } = logout(event);
+            return headers
+                ? new Response(response.body, {
+                    ...response,
+                    headers: Object.assign({}, response.headers, headers)
+                })
+                : Response.redirect(url.origin);
+        }
+
         const [authorized, { authorization, redirectUrl }] = await authorize(event);
         if (authorized && authorization.accessToken) {
             request = new Request(request, {
@@ -164,12 +170,65 @@ addEventListener('fetch', event => {
             return Response.redirect(redirectUrl)
         }
 
-        response = event.respondWith(handleRequest(event.request));
+        if (request.method === 'PUT') {
+            response = updateTodos(request, authorization);
+        } else {
+            response = getTodos(request, authorization);
+        }
 
-        return response
+        return response;
     } catch (e) {
         return new Response(e.message || e.toString(), { status: 500 })
     }
+}
+
+addEventListener('fetch', event => {
+    // let request = event.request;
+    return event.respondWith(handleRequest(event));
+    // let response = new Response(null);
+    // const url = new URL(request.url);
+    //
+    // try {
+    //     if (url.pathname === '/auth') {
+    //         const authorizedResponse = await handleRedirect(event);
+    //         if (!authorizedResponse) {
+    //             return new Response("Unauthorized", { status: 401 })
+    //         }
+    //         response = new Response(response.body, {
+    //             response,
+    //             ...authorizedResponse,
+    //         });
+    //         return response
+    //     }
+    //
+    //     if (url.pathname === "/logout") {
+    //         const { headers } = logout(event);
+    //         return headers
+    //             ? new Response(response.body, {
+    //                 ...response,
+    //                 headers: Object.assign({}, response.headers, headers)
+    //             })
+    //             : Response.redirect(url.origin);
+    //     }
+    //
+    //     const [authorized, { authorization, redirectUrl }] = await authorize(event);
+    //     if (authorized && authorization.accessToken) {
+    //         request = new Request(request, {
+    //             headers: {
+    //                 Authorization: `Bearer ${authorization.accessToken}`,
+    //             },
+    //         })
+    //     }
+    //     if (!authorized) {
+    //         return Response.redirect(redirectUrl)
+    //     }
+    //
+    //     response = event.respondWith(handleRequest(event.request, authorization));
+    //
+    //     return response
+    // } catch (e) {
+    //     return new Response(e.message || e.toString(), { status: 500 })
+    // }
 
 });
 
